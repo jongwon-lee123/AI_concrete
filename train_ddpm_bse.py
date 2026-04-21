@@ -22,8 +22,8 @@ from torch.utils.data import DataLoader, Dataset
 @dataclass
 class Config:
     # Paths
-    data_dir: str = "./data"
-    save_dir: str = "./outputs"
+    data_dir: str = r"C:\Users\whddn\Desktop\AI\AI_concrete"
+    save_dir: str = r"C:\Users\whddn\Desktop\AI\AI_concrete\outputs"
 
     # Dataset / patch sampling
     patch_size: int = 256
