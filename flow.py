@@ -258,9 +258,37 @@ def analyze_images(
     return df, str(composite_path), str(csv_path)
 
 
+def collect_image_paths(image_paths: list[str], image_dir: str | None = None) -> list[str]:
+    """Collect image files from explicit paths and/or a directory."""
+    supported_ext = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}
+    collected = [p for p in image_paths if Path(p).suffix.lower() in supported_ext]
+
+    if image_dir:
+        folder = Path(image_dir)
+        if not folder.exists():
+            raise RuntimeError(f"이미지 폴더가 존재하지 않습니다: {image_dir}")
+        from_dir = [
+            str(p)
+            for p in sorted(folder.iterdir())
+            if p.is_file() and p.suffix.lower() in supported_ext
+        ]
+        collected.extend(from_dir)
+
+    # Keep insertion order while removing duplicates.
+    deduped = list(dict.fromkeys(collected))
+    if not deduped:
+        raise RuntimeError("분석할 이미지가 없습니다. 경로나 폴더를 확인하세요.")
+    return deduped
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Flow table image analyzer")
-    parser.add_argument("image_paths", nargs="+", help="Input image file paths")
+    parser.add_argument("image_paths", nargs="*", help="Input image file paths")
+    parser.add_argument(
+        "--image-dir",
+        default=None,
+        help="Folder path containing images (.jpg/.jpeg/.png/.bmp/.tif/.tiff)",
+    )
     parser.add_argument("--brass-od-mm", type=float, default=250.0)
     parser.add_argument("--mold-base-mm", type=float, default=100.0)
     parser.add_argument("--out-dir", default=".")
@@ -269,8 +297,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    image_paths = collect_image_paths(args.image_paths, args.image_dir)
     df, composite_path, csv_path = analyze_images(
-        image_paths=args.image_paths,
+        image_paths=image_paths,
         brass_outer_diameter_mm=args.brass_od_mm,
         mold_base_diameter_mm=args.mold_base_mm,
         out_dir=args.out_dir,

@@ -25,6 +25,34 @@ python flow.py \
   --out-dir ./out
 ```
 
+또는 폴더 단위로 실행:
+```bash
+python flow.py \
+  --image-dir "/path/to/플로우 테스트" \
+  --brass-od-mm 250 \
+  --mold-base-mm 100 \
+  --out-dir ./out
+```
+
+## Windows에서 바로 실행 (질문 주신 케이스)
+이미지 폴더가 예를 들어 아래라면:
+`C:\Users\whddn\Desktop\2026 Business folders\콘크리트\플로우 테스트`
+
+PowerShell에서:
+```powershell
+cd C:\작업\AI_concrete
+python flow.py `
+  --image-dir "C:\Users\whddn\Desktop\2026 Business folders\콘크리트\플로우 테스트" `
+  --brass-od-mm 250 `
+  --mold-base-mm 100 `
+  --out-dir ".\out"
+```
+
+실행 후 `.\out` 폴더에 아래 파일이 생성됩니다.
+- `flow_annotated_1.png`, `flow_annotated_2.png`, ...
+- `flow_test_annotated_results.png` (합성 결과)
+- `flow_test_results.csv` (수치 결과)
+
 ## 테스트
 ```bash
 python -m unittest discover -s tests -p 'test_*.py'
