@@ -292,21 +292,39 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--brass-od-mm", type=float, default=250.0)
     parser.add_argument("--mold-base-mm", type=float, default=100.0)
     parser.add_argument("--out-dir", default=".")
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Print debug information (script path, image count, output path)",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    image_paths = collect_image_paths(args.image_paths, args.image_dir)
-    df, composite_path, csv_path = analyze_images(
-        image_paths=image_paths,
-        brass_outer_diameter_mm=args.brass_od_mm,
-        mold_base_diameter_mm=args.mold_base_mm,
-        out_dir=args.out_dir,
-    )
-    print(df)
-    print(f"composite_path={composite_path}")
-    print(f"csv_path={csv_path}")
+    try:
+        image_paths = collect_image_paths(args.image_paths, args.image_dir)
+        if args.debug:
+            print(f"[debug] script={Path(__file__).resolve()}")
+            print(f"[debug] images={len(image_paths)}")
+            print(f"[debug] out_dir={Path(args.out_dir).resolve()}")
+
+        df, composite_path, csv_path = analyze_images(
+            image_paths=image_paths,
+            brass_outer_diameter_mm=args.brass_od_mm,
+            mold_base_diameter_mm=args.mold_base_mm,
+            out_dir=args.out_dir,
+        )
+        print(df)
+        print(f"composite_path={composite_path}")
+        print(f"csv_path={csv_path}")
+    except ModuleNotFoundError as e:
+        missing = e.name or "dependency"
+        raise RuntimeError(
+            f"필수 라이브러리가 없습니다: {missing}. "
+            "다음 명령으로 설치 후 다시 실행하세요: "
+            "pip install opencv-python numpy pandas matplotlib"
+        ) from e
 
 
 if __name__ == "__main__":

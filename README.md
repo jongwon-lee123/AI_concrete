@@ -48,10 +48,29 @@ python flow.py `
   --out-dir ".\out"
 ```
 
+문제가 있을 때(경로/실행 파일 확인):
+```powershell
+python .\flow.py `
+  --image-dir "C:\Users\whddn\Desktop\2026 Business folders\콘크리트\플로우 테스트" `
+  --brass-od-mm 250 `
+  --mold-base-mm 100 `
+  --out-dir ".\out" `
+  --debug
+```
+
 실행 후 `.\out` 폴더에 아래 파일이 생성됩니다.
 - `flow_annotated_1.png`, `flow_annotated_2.png`, ...
 - `flow_test_annotated_results.png` (합성 결과)
 - `flow_test_results.csv` (수치 결과)
+
+## 안 될 때 빠른 점검
+1. `python .\flow.py --debug ...`로 실행해서 `[debug] script=...` 경로가 현재 수정한 `flow.py`인지 확인
+2. PowerShell 현재 경로 확인: `pwd`
+3. 출력 폴더 확인: `dir .\out`
+4. 필요한 라이브러리 설치:
+   ```powershell
+   pip install opencv-python numpy pandas matplotlib
+   ```
 
 ## 테스트
 ```bash
