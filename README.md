@@ -35,6 +35,8 @@ python flow.py \
 ```
 
 ## Windows에서 바로 실행 (질문 주신 케이스)
+핵심: **`flow.py` 파일이 있는 폴더에서 실행**하거나, `flow.py`의 **절대경로**를 지정해야 합니다.
+
 이미지 폴더가 예를 들어 아래라면:
 `C:\Users\whddn\Desktop\2026 Business folders\콘크리트\플로우 테스트`
 
@@ -46,6 +48,23 @@ python flow.py `
   --brass-od-mm 250 `
   --mold-base-mm 100 `
   --out-dir ".\out"
+```
+
+또는 현재 폴더가 어디든지 상관없이(절대경로 실행):
+```powershell
+python "C:\작업\AI_concrete\flow.py" `
+  --image-dir "C:\Users\whddn\Desktop\2026 Business folders\콘크리트\플로우 테스트" `
+  --brass-od-mm 250 `
+  --mold-base-mm 100 `
+  --out-dir "C:\작업\AI_concrete\out"
+```
+
+### 더 쉬운 방법 (권장)
+저장소에 포함된 `run_flow.ps1` 스크립트를 사용하면, 스크립트가 자동으로 같은 폴더의 `flow.py`를 실행합니다.
+
+```powershell
+cd C:\작업\AI_concrete
+.\run_flow.ps1 -ImageDir "C:\Users\whddn\Desktop\2026 Business folders\콘크리트\플로우 테스트" -OutDir ".\out" -Debug
 ```
 
 문제가 있을 때(경로/실행 파일 확인):
