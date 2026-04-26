@@ -301,12 +301,21 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print debug information (script path, image count, output path)",
     )
+    parser.add_argument(
+        "--show-path",
+        action="store_true",
+        help="Print absolute path of this flow.py and exit",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     try:
+        if args.show_path:
+            print(Path(__file__).resolve())
+            return
+
         image_paths = collect_image_paths(args.image_paths, args.image_dir)
         if args.debug:
             print(f"[debug] script={Path(__file__).resolve()}")

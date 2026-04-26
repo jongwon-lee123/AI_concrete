@@ -83,6 +83,10 @@ python .\flow.py `
 - `flow_test_results.csv` (수치 결과)
 
 ## 안 될 때 빠른 점검
+0. 현재 실행되는 `flow.py` 경로만 확인:
+   ```powershell
+   python .\flow.py --show-path
+   ```
 1. `python .\flow.py --debug ...`로 실행해서 `[debug] script=...` 경로가 현재 수정한 `flow.py`인지 확인
 2. PowerShell 현재 경로 확인: `pwd`
 3. 출력 폴더 확인: `dir .\out`
