@@ -254,9 +254,12 @@ class UNetEps(nn.Module):
         self.mid2 = ResBlock(mid_ch, mid_ch, time_dim)
 
         self.ups = nn.ModuleList()
-        rev_chs = list(reversed(chs))
-        for i in range(len(rev_chs) - 1):
-            self.ups.append(UpBlock(rev_chs[i], rev_chs[i + 1], rev_chs[i + 1], time_dim))
+        skip_chs = list(reversed(chs[1:]))
+        out_chs = list(reversed(chs[:-1]))
+        in_ch_cur = chs[-1]
+        for skip_ch, out_ch_i in zip(skip_chs, out_chs):
+            self.ups.append(UpBlock(in_ch_cur, skip_ch, out_ch_i, time_dim))
+            in_ch_cur = out_ch_i
 
         self.out_norm = nn.GroupNorm(8, chs[0])
         self.out_conv = nn.Conv2d(chs[0], out_ch, 3, padding=1)
