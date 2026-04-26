@@ -4,7 +4,7 @@ param(
 
   [double]$BrassOdMm = 250,
   [double]$MoldBaseMm = 100,
-  [string]$OutDir = ".\out",
+  [string]$OutDir = "",
   [switch]$Debug
 )
 
@@ -21,9 +21,15 @@ if (-not (Test-Path $ImageDir)) {
   exit 1
 }
 
+$ResolvedImageDir = (Resolve-Path $ImageDir).Path
+if ([string]::IsNullOrWhiteSpace($OutDir)) {
+  # Default: save right next to input images.
+  $OutDir = $ResolvedImageDir
+}
+
 $Args = @(
   $FlowPy,
-  "--image-dir", $ImageDir,
+  "--image-dir", $ResolvedImageDir,
   "--brass-od-mm", $BrassOdMm,
   "--mold-base-mm", $MoldBaseMm,
   "--out-dir", $OutDir
@@ -32,7 +38,7 @@ $Args = @(
 if ($Debug) {
   $Args += "--debug"
   Write-Host "[debug] flow.py=$FlowPy"
-  Write-Host "[debug] image_dir=$ImageDir"
+  Write-Host "[debug] image_dir=$ResolvedImageDir"
   Write-Host "[debug] out_dir=$OutDir"
 }
 

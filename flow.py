@@ -330,6 +330,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--brass-od-mm", type=float, default=250.0)
     parser.add_argument("--mold-base-mm", type=float, default=100.0)
     parser.add_argument("--out-dir", default=".")
+    parser.add_argument(
+        "--save-in-image-dir",
+        action="store_true",
+        help="Save outputs into image_dir folder instead of out-dir",
+    )
     parser.add_argument("--input-json", default=None, help="Path to input config JSON")
     parser.add_argument(
         "--result-json",
@@ -365,6 +370,10 @@ def main() -> None:
             args.mold_base_mm = float(cfg.get("mold_base_mm", args.mold_base_mm))
             args.out_dir = cfg.get("out_dir", args.out_dir)
             args.result_json = cfg.get("result_json", args.result_json)
+            args.save_in_image_dir = bool(cfg.get("save_in_image_dir", args.save_in_image_dir))
+
+        if args.save_in_image_dir and args.image_dir:
+            args.out_dir = args.image_dir
 
         image_paths = collect_image_paths(args.image_paths, args.image_dir)
         if args.debug:

@@ -64,8 +64,10 @@ python "C:\작업\AI_concrete\flow.py" `
 
 ```powershell
 cd C:\작업\AI_concrete
-.\run_flow.ps1 -ImageDir "C:\Users\whddn\Desktop\2026 Business folders\콘크리트\플로우 테스트" -OutDir ".\out" -Debug
+.\run_flow.ps1 -ImageDir "C:\Users\whddn\Desktop\2026 Business folders\콘크리트\플로우 테스트" -Debug
 ```
+
+> `-OutDir`를 생략하면 **입력 이미지 폴더(`ImageDir`)에 바로 저장**됩니다.
 
 문제가 있을 때(경로/실행 파일 확인):
 ```powershell
@@ -104,6 +106,11 @@ python .\flow.py --input-json .\input_config.json
 결과:
 - 기존 출력(`flow_test_results.csv`, 주석 이미지, 합성 이미지)
 - 추가 출력: `result_meta.json` (입력 이미지 목록, 결과 파일 경로, 행 개수)
+
+같은 이미지 폴더에 저장하고 싶으면:
+```powershell
+python .\flow.py --image-dir "C:\Users\whddn\Desktop\2026 Business folders\콘크리트\플로우 테스트" --save-in-image-dir
+```
 
 ## 안 될 때 빠른 점검
 0. 현재 실행되는 `flow.py` 경로만 확인:
