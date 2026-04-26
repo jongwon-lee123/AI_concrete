@@ -82,6 +82,29 @@ python .\flow.py `
 - `flow_test_annotated_results.png` (합성 결과)
 - `flow_test_results.csv` (수치 결과)
 
+## 입력/저장(JSON) 방식 추가
+입력 데이터를 JSON으로 불러오고, 실행 결과 메타데이터를 JSON으로 저장할 수 있습니다.
+
+입력 예시 (`input_config.json`):
+```json
+{
+  "image_dir": "C:/Users/whddn/Desktop/2026 Business folders/콘크리트/플로우 테스트",
+  "brass_od_mm": 250,
+  "mold_base_mm": 100,
+  "out_dir": "./out",
+  "result_json": "./out/result_meta.json"
+}
+```
+
+실행:
+```powershell
+python .\flow.py --input-json .\input_config.json
+```
+
+결과:
+- 기존 출력(`flow_test_results.csv`, 주석 이미지, 합성 이미지)
+- 추가 출력: `result_meta.json` (입력 이미지 목록, 결과 파일 경로, 행 개수)
+
 ## 안 될 때 빠른 점검
 0. 현재 실행되는 `flow.py` 경로만 확인:
    ```powershell

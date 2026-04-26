@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import argparse
 import math
+import json
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -285,6 +286,39 @@ def collect_image_paths(image_paths: list[str], image_dir: str | None = None) ->
     return deduped
 
 
+def load_input_json(path: str) -> dict:
+    """Load input configuration from a JSON file."""
+    p = Path(path)
+    if not p.exists():
+        raise RuntimeError(f"입력 JSON 파일이 없습니다: {path}")
+    with p.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+    if not isinstance(data, dict):
+        raise RuntimeError("입력 JSON 형식이 잘못되었습니다. 객체(dict)여야 합니다.")
+    return data
+
+
+def save_result_json(
+    path: str,
+    image_paths: list[str],
+    composite_path: str,
+    csv_path: str,
+    row_count: int,
+) -> None:
+    """Save result metadata to JSON."""
+    payload = {
+        "image_count": len(image_paths),
+        "image_paths": image_paths,
+        "composite_path": composite_path,
+        "csv_path": csv_path,
+        "row_count": row_count,
+    }
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Flow table image analyzer")
     parser.add_argument("image_paths", nargs="*", help="Input image file paths")
@@ -296,6 +330,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--brass-od-mm", type=float, default=250.0)
     parser.add_argument("--mold-base-mm", type=float, default=100.0)
     parser.add_argument("--out-dir", default=".")
+    parser.add_argument("--input-json", default=None, help="Path to input config JSON")
+    parser.add_argument(
+        "--result-json",
+        default=None,
+        help="Optional output JSON path for saving result metadata",
+    )
     parser.add_argument(
         "--debug",
         action="store_true",
@@ -316,6 +356,16 @@ def main() -> None:
             print(Path(__file__).resolve())
             return
 
+        # Optional JSON input config overrides CLI values.
+        if args.input_json:
+            cfg = load_input_json(args.input_json)
+            args.image_paths = cfg.get("image_paths", args.image_paths)
+            args.image_dir = cfg.get("image_dir", args.image_dir)
+            args.brass_od_mm = float(cfg.get("brass_od_mm", args.brass_od_mm))
+            args.mold_base_mm = float(cfg.get("mold_base_mm", args.mold_base_mm))
+            args.out_dir = cfg.get("out_dir", args.out_dir)
+            args.result_json = cfg.get("result_json", args.result_json)
+
         image_paths = collect_image_paths(args.image_paths, args.image_dir)
         if args.debug:
             print(f"[debug] script={Path(__file__).resolve()}")
@@ -331,6 +381,15 @@ def main() -> None:
         print(df)
         print(f"composite_path={composite_path}")
         print(f"csv_path={csv_path}")
+        if args.result_json:
+            save_result_json(
+                path=args.result_json,
+                image_paths=image_paths,
+                composite_path=composite_path,
+                csv_path=csv_path,
+                row_count=len(df),
+            )
+            print(f"result_json={args.result_json}")
     except ModuleNotFoundError as e:
         missing = e.name or "dependency"
         raise RuntimeError(

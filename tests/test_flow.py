@@ -1,8 +1,9 @@
 import unittest
 from tempfile import TemporaryDirectory
 from pathlib import Path
+import json
 
-from flow import classify_ks, collect_image_paths
+from flow import classify_ks, collect_image_paths, load_input_json, save_result_json
 
 
 class FlowRuleTests(unittest.TestCase):
@@ -27,6 +28,27 @@ class FlowRuleTests(unittest.TestCase):
         with TemporaryDirectory() as td:
             with self.assertRaises(RuntimeError):
                 collect_image_paths([], td)
+
+    def test_load_input_json(self) -> None:
+        with TemporaryDirectory() as td:
+            p = Path(td, "input.json")
+            p.write_text(json.dumps({"image_dir": "x", "brass_od_mm": 250}), encoding="utf-8")
+            data = load_input_json(str(p))
+            self.assertEqual(data["image_dir"], "x")
+
+    def test_save_result_json(self) -> None:
+        with TemporaryDirectory() as td:
+            out = Path(td, "out", "result.json")
+            save_result_json(
+                path=str(out),
+                image_paths=["a.jpg", "b.jpg"],
+                composite_path="out/composite.png",
+                csv_path="out/result.csv",
+                row_count=2,
+            )
+            payload = json.loads(out.read_text(encoding="utf-8"))
+            self.assertEqual(payload["image_count"], 2)
+            self.assertEqual(payload["row_count"], 2)
 
 
 if __name__ == "__main__":
