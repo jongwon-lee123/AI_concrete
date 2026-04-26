@@ -14,6 +14,7 @@ from pathlib import Path
 import argparse
 import math
 import json
+import os
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -319,6 +320,54 @@ def save_result_json(
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
 
+def find_path_candidates(name_or_path: str, max_depth: int = 5) -> list[str]:
+    """Find candidate paths for a folder/file name.
+
+    - If the input path exists, return that resolved path.
+    - Otherwise search common roots (cwd, home, Desktop, Documents, Downloads).
+    """
+    p = Path(name_or_path).expanduser()
+    if p.exists():
+        return [str(p.resolve())]
+
+    target = name_or_path.lower().strip()
+    if not target:
+        return []
+
+    home = Path.home()
+    roots = [Path.cwd(), home, home / "Desktop", home / "Documents", home / "Downloads"]
+    existing_roots: list[Path] = []
+    seen = set()
+    for r in roots:
+        rr = r.resolve()
+        if rr.exists() and rr not in seen:
+            existing_roots.append(rr)
+            seen.add(rr)
+
+    matches: list[str] = []
+    for root in existing_roots:
+        root_depth = len(root.parts)
+        for cur, dirs, files in os.walk(root):
+            cur_path = Path(cur)
+            depth = len(cur_path.parts) - root_depth
+            if depth > max_depth:
+                dirs[:] = []
+                continue
+
+            for d in dirs:
+                if target in d.lower():
+                    matches.append(str((cur_path / d).resolve()))
+            for f in files:
+                if target in f.lower():
+                    matches.append(str((cur_path / f).resolve()))
+
+            if len(matches) >= 20:
+                return matches[:20]
+
+    # Deduplicate while preserving order
+    return list(dict.fromkeys(matches))
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Flow table image analyzer")
     parser.add_argument("image_paths", nargs="*", help="Input image file paths")
@@ -351,6 +400,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print absolute path of this flow.py and exit",
     )
+    parser.add_argument(
+        "--find-path",
+        default=None,
+        help="Find matching folder/file path candidates and exit",
+    )
     return parser.parse_args()
 
 
@@ -359,6 +413,15 @@ def main() -> None:
     try:
         if args.show_path:
             print(Path(__file__).resolve())
+            return
+        if args.find_path:
+            candidates = find_path_candidates(args.find_path)
+            if not candidates:
+                print("경로 후보를 찾지 못했습니다.")
+            else:
+                print("경로 후보:")
+                for c in candidates:
+                    print(c)
             return
 
         # Optional JSON input config overrides CLI values.

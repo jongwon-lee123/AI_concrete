@@ -3,7 +3,13 @@ from tempfile import TemporaryDirectory
 from pathlib import Path
 import json
 
-from flow import classify_ks, collect_image_paths, load_input_json, save_result_json
+from flow import (
+    classify_ks,
+    collect_image_paths,
+    load_input_json,
+    save_result_json,
+    find_path_candidates,
+)
 
 
 class FlowRuleTests(unittest.TestCase):
@@ -49,6 +55,13 @@ class FlowRuleTests(unittest.TestCase):
             payload = json.loads(out.read_text(encoding="utf-8"))
             self.assertEqual(payload["image_count"], 2)
             self.assertEqual(payload["row_count"], 2)
+
+    def test_find_path_candidates_existing_path(self) -> None:
+        with TemporaryDirectory() as td:
+            p = Path(td, "sample.txt")
+            p.write_text("x", encoding="utf-8")
+            found = find_path_candidates(str(p))
+            self.assertEqual(found[0], str(p.resolve()))
 
 
 if __name__ == "__main__":
