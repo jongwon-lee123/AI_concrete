@@ -55,6 +55,32 @@ def _ensure_image(img_bgr, image_path: str):
     return img_bgr
 
 
+def _normalize_path_string(path: str) -> str:
+    return path.strip().strip("'").strip('"')
+
+
+def _read_image_unicode_safe(image_path: str):
+    """Read image robustly on Windows/non-ASCII paths."""
+    import cv2
+    import numpy as np
+
+    # Normalize accidental wrapping quotes from copy/paste.
+    normalized = _normalize_path_string(image_path)
+
+    # Preferred method for non-ASCII paths on Windows.
+    try:
+        data = np.fromfile(normalized, dtype=np.uint8)
+        if data.size > 0:
+            img = cv2.imdecode(data, cv2.IMREAD_COLOR)
+            if img is not None:
+                return img
+    except Exception:
+        pass
+
+    # Fallback
+    return cv2.imread(normalized)
+
+
 def detect_brass_circle(img_bgr) -> tuple[int, int, int]:
     import cv2
     import numpy as np
@@ -180,7 +206,7 @@ def analyze_images(
     annotated_paths: list[str] = []
 
     for idx, p in enumerate(image_paths, 1):
-        img = _ensure_image(cv2.imread(p), p)
+        img = _ensure_image(_read_image_unicode_safe(p), p)
 
         x_c, y_c, r_brass = detect_brass_circle(img)
         mm_per_px = brass_outer_diameter_mm / (2 * r_brass)

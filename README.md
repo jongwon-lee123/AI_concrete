@@ -136,6 +136,7 @@ python .\flow.py --save-in-image-dir --debug
    ```powershell
    pip install opencv-python numpy pandas matplotlib
    ```
+5. 한글 경로/공백 경로에서 `imread` 오류가 나면 최신 `flow.py`의 Unicode-safe 로더를 사용하도록 업데이트 후 재실행
 
 ## 테스트
 ```bash

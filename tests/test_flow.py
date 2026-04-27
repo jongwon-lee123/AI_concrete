@@ -4,6 +4,7 @@ from pathlib import Path
 import json
 
 from flow import (
+    _normalize_path_string,
     auto_detect_image_dir,
     classify_ks,
     collect_image_paths,
@@ -77,6 +78,10 @@ class FlowRuleTests(unittest.TestCase):
     def test_resolve_input_dir_prefers_explicit(self) -> None:
         resolved = resolve_input_dir("C:/explicit/path", default_candidates=["C:/dummy"])
         self.assertEqual(resolved, "C:/explicit/path")
+
+    def test_normalize_path_string(self) -> None:
+        self.assertEqual(_normalize_path_string('"C:/a/b.jpg"'), "C:/a/b.jpg")
+        self.assertEqual(_normalize_path_string("'C:/a/b.jpg'"), "C:/a/b.jpg")
 
 
 if __name__ == "__main__":
