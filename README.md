@@ -112,6 +112,11 @@ python .\flow.py --input-json .\input_config.json
 python .\flow.py --image-dir "C:\Users\whddn\Desktop\2026 Business folders\콘크리트\플로우 테스트" --save-in-image-dir
 ```
 
+`flow.py` 자체에서 자동 탐색도 지원합니다(이미지 경로를 안 주면 자동으로 이미지가 많은 폴더를 찾음):
+```powershell
+python .\flow.py --save-in-image-dir --debug
+```
+
 ## 안 될 때 빠른 점검
 0. 현재 실행되는 `flow.py` 경로만 확인:
    ```powershell

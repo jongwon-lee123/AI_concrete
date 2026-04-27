@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import pandas as pd
 
+SUPPORTED_EXT = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}
+
 
 
 @dataclass(frozen=True)
@@ -266,8 +268,7 @@ def analyze_images(
 
 def collect_image_paths(image_paths: list[str], image_dir: str | None = None) -> list[str]:
     """Collect image files from explicit paths and/or a directory."""
-    supported_ext = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}
-    collected = [p for p in image_paths if Path(p).suffix.lower() in supported_ext]
+    collected = [p for p in image_paths if Path(p).suffix.lower() in SUPPORTED_EXT]
 
     if image_dir:
         folder = Path(image_dir)
@@ -276,7 +277,7 @@ def collect_image_paths(image_paths: list[str], image_dir: str | None = None) ->
         from_dir = [
             str(p)
             for p in sorted(folder.iterdir())
-            if p.is_file() and p.suffix.lower() in supported_ext
+            if p.is_file() and p.suffix.lower() in SUPPORTED_EXT
         ]
         collected.extend(from_dir)
 
@@ -368,6 +369,37 @@ def find_path_candidates(name_or_path: str, max_depth: int = 5) -> list[str]:
     return list(dict.fromkeys(matches))
 
 
+def auto_detect_image_dir(search_roots: list[Path] | None = None, min_images: int = 2) -> str | None:
+    """Auto-detect the most likely image directory.
+
+    Picks the directory with the highest image file count under common roots.
+    """
+    if search_roots is None:
+        home = Path.home()
+        search_roots = [Path.cwd(), home, home / "Desktop", home / "Documents", home / "Downloads"]
+
+    best_dir: Path | None = None
+    best_count = 0
+
+    for root in search_roots:
+        if not root.exists():
+            continue
+        for cur, dirs, files in os.walk(root):
+            cur_path = Path(cur)
+            image_count = sum(1 for f in files if Path(f).suffix.lower() in SUPPORTED_EXT)
+            if image_count > best_count:
+                best_count = image_count
+                best_dir = cur_path
+            # Skip extremely deep traversal for performance.
+            rel_depth = len(cur_path.parts) - len(root.parts)
+            if rel_depth > 6:
+                dirs[:] = []
+
+    if best_dir is None or best_count < min_images:
+        return None
+    return str(best_dir.resolve())
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Flow table image analyzer")
     parser.add_argument("image_paths", nargs="*", help="Input image file paths")
@@ -434,6 +466,17 @@ def main() -> None:
             args.out_dir = cfg.get("out_dir", args.out_dir)
             args.result_json = cfg.get("result_json", args.result_json)
             args.save_in_image_dir = bool(cfg.get("save_in_image_dir", args.save_in_image_dir))
+
+        # If user did not pass image paths/dir, try auto detection directly in flow.py.
+        if not args.image_paths and not args.image_dir:
+            detected = auto_detect_image_dir()
+            if detected:
+                args.image_dir = detected
+                print(f"[auto] image_dir={detected}")
+            else:
+                raise RuntimeError(
+                    "이미지 경로를 찾지 못했습니다. --image-dir를 지정하거나 --find-path로 검색하세요."
+                )
 
         if args.save_in_image_dir and args.image_dir:
             args.out_dir = args.image_dir

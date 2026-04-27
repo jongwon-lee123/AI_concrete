@@ -4,6 +4,7 @@ from pathlib import Path
 import json
 
 from flow import (
+    auto_detect_image_dir,
     classify_ks,
     collect_image_paths,
     load_input_json,
@@ -62,6 +63,15 @@ class FlowRuleTests(unittest.TestCase):
             p.write_text("x", encoding="utf-8")
             found = find_path_candidates(str(p))
             self.assertEqual(found[0], str(p.resolve()))
+
+    def test_auto_detect_image_dir(self) -> None:
+        with TemporaryDirectory() as td:
+            folder = Path(td, "images")
+            folder.mkdir(parents=True, exist_ok=True)
+            Path(folder, "a.jpg").write_text("x", encoding="utf-8")
+            Path(folder, "b.png").write_text("x", encoding="utf-8")
+            detected = auto_detect_image_dir(search_roots=[Path(td)], min_images=2)
+            self.assertEqual(detected, str(folder.resolve()))
 
 
 if __name__ == "__main__":
