@@ -7,6 +7,7 @@ from flow import (
     auto_detect_image_dir,
     classify_ks,
     collect_image_paths,
+    resolve_input_dir,
     load_input_json,
     save_result_json,
     find_path_candidates,
@@ -72,6 +73,10 @@ class FlowRuleTests(unittest.TestCase):
             Path(folder, "b.png").write_text("x", encoding="utf-8")
             detected = auto_detect_image_dir(search_roots=[Path(td)], min_images=2)
             self.assertEqual(detected, str(folder.resolve()))
+
+    def test_resolve_input_dir_prefers_explicit(self) -> None:
+        resolved = resolve_input_dir("C:/explicit/path", default_candidates=["C:/dummy"])
+        self.assertEqual(resolved, "C:/explicit/path")
 
 
 if __name__ == "__main__":

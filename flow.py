@@ -21,6 +21,9 @@ if TYPE_CHECKING:
     import pandas as pd
 
 SUPPORTED_EXT = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}
+DEFAULT_IMAGE_DIR_CANDIDATES = [
+    r"C:\Users\whddn\Desktop\2026 Business folders\콘크리트\플로우 테스트",
+]
 
 
 
@@ -400,6 +403,25 @@ def auto_detect_image_dir(search_roots: list[Path] | None = None, min_images: in
     return str(best_dir.resolve())
 
 
+def resolve_input_dir(
+    image_dir: str | None, default_candidates: list[str] | None = None
+) -> str | None:
+    """Resolve image_dir with simple defaults.
+
+    Priority:
+    1) Explicit image_dir from args
+    2) Known default candidate paths (for user environment)
+    """
+    if image_dir:
+        return image_dir
+
+    candidates = default_candidates or DEFAULT_IMAGE_DIR_CANDIDATES
+    for c in candidates:
+        if Path(c).exists():
+            return c
+    return None
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Flow table image analyzer")
     parser.add_argument("image_paths", nargs="*", help="Input image file paths")
@@ -467,7 +489,10 @@ def main() -> None:
             args.result_json = cfg.get("result_json", args.result_json)
             args.save_in_image_dir = bool(cfg.get("save_in_image_dir", args.save_in_image_dir))
 
-        # If user did not pass image paths/dir, try auto detection directly in flow.py.
+        # 1) Try known default input directory.
+        args.image_dir = resolve_input_dir(args.image_dir)
+
+        # 2) If still missing, try auto detection directly in flow.py.
         if not args.image_paths and not args.image_dir:
             detected = auto_detect_image_dir()
             if detected:
