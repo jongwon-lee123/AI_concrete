@@ -22,12 +22,15 @@ from torch.utils.data import DataLoader, Dataset
 @dataclass
 class Config:
     # Paths
-    data_dir: str = r"C:\Users\whddn\Desktop\AI\AI_concrete"
+    data_dir: str = r"C:\Users\whddn\Desktop\2026 Business folders\콘크리트\BSE 이미지\20260310\ex"
     save_dir: str = r"C:\Users\whddn\Desktop\AI\AI_concrete\outputs"
 
     # Dataset / patch sampling
     patch_size: int = 256
-    ignore_bottom_px: int = 60
+    ignore_bottom_px: int = 180  # crop the SEM footer/scale-bar overlay before sampling
+    input_image_count: int = 6  # use exactly this many source images by default (0 = all images)
+    input_selection: str = "first"  # ["first", "random", "all"]
+    require_input_image_count: bool = True  # fail clearly if fewer than input_image_count images exist
     hflip: bool = True
     vflip: bool = False
     num_workers: int = 0  # Windows-friendly default
@@ -35,7 +38,7 @@ class Config:
 
     # Training
     seed: int = 42
-    batch_size: int = 8
+    batch_size: int = 4  # safer default for an 8 GB GPU
     max_steps: int = 20000
     lr: float = 2e-4
     weight_decay: float = 0.0
@@ -55,6 +58,7 @@ class Config:
     num_samples: int = 16
     sample_interval: int = 1000
     ckpt_interval: int = 2000
+    save_individual_samples: bool = True  # also save each generated patch separately (not only a grid)
 
     # Optional debug/eval
     save_real_debug_grid: bool = True
@@ -102,8 +106,12 @@ def parse_args() -> Config:
         raise ValueError("beta_schedule must be one of [linear, cosine]")
     if cfg.pore_threshold_mode not in {"otsu", "fixed"}:
         raise ValueError("pore_threshold_mode must be one of [otsu, fixed]")
+    if cfg.input_selection not in {"first", "random", "all"}:
+        raise ValueError("input_selection must be one of [first, random, all]")
     if cfg.num_samples <= 0:
         raise ValueError("num_samples must be > 0")
+    if cfg.input_image_count < 0:
+        raise ValueError("input_image_count must be >= 0")
     return cfg
 
 
@@ -119,6 +127,9 @@ class BSEPatchDataset(Dataset):
         patch_size: int,
         ignore_bottom_px: int,
         dataset_size: int,
+        input_image_count: int = 0,
+        input_selection: str = "all",
+        require_input_image_count: bool = False,
         hflip: bool = True,
         vflip: bool = False,
     ):
@@ -132,9 +143,26 @@ class BSEPatchDataset(Dataset):
         if not root.exists():
             raise FileNotFoundError(f"data_dir not found: {data_dir}")
 
-        self.files = [p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in ALLOWED_EXTS]
-        if not self.files:
+        all_files = sorted(p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in ALLOWED_EXTS)
+        if not all_files:
             raise RuntimeError(f"No image files found under {data_dir}")
+
+        if input_image_count > 0 and len(all_files) < input_image_count and require_input_image_count:
+            raise RuntimeError(
+                f"Expected at least {input_image_count} input images, but found {len(all_files)} under {data_dir}"
+            )
+
+        if input_selection == "all" or input_image_count == 0:
+            self.files = all_files
+        elif input_selection == "first":
+            self.files = all_files[:input_image_count]
+        elif input_selection == "random":
+            self.files = random.sample(all_files, k=min(input_image_count, len(all_files)))
+        else:
+            raise ValueError("input_selection must be one of [first, random, all]")
+
+        if not self.files:
+            raise RuntimeError(f"No selected image files under {data_dir}")
 
     def __len__(self) -> int:
         return self.dataset_size
@@ -372,7 +400,7 @@ def tensor_to_uint8(img: torch.Tensor) -> np.ndarray:
 def save_grid(images: torch.Tensor, path: Path, nrow: int = 4) -> None:
     # images: [N,1,H,W], values in [-1,1]
     n, _, h, w = images.shape
-    nrow = max(1, nrow)
+    nrow = min(max(1, nrow), n)
     ncol = int(math.ceil(n / nrow))
     canvas = np.zeros((ncol * h, nrow * w), dtype=np.uint8)
 
@@ -382,7 +410,22 @@ def save_grid(images: torch.Tensor, path: Path, nrow: int = 4) -> None:
         arr = tensor_to_uint8(images[i, 0])
         canvas[r * h : (r + 1) * h, c * w : (c + 1) * w] = arr
 
-    Image.fromarray(canvas, mode="L").save(path)
+    Image.fromarray(canvas).save(path)
+
+
+def save_individual_images(images: torch.Tensor, out_dir: Path, prefix: str) -> None:
+    # images: [N,1,H,W], values in [-1,1]
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for i in range(images.shape[0]):
+        arr = tensor_to_uint8(images[i, 0])
+        Image.fromarray(arr).save(out_dir / f"{prefix}_{i:02d}.png")
+
+
+def write_selected_inputs(files: List[Path], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as f:
+        for idx, file_path in enumerate(files, start=1):
+            f.write(f"{idx}: {file_path}\n")
 
 
 def otsu_threshold_uint8(gray: np.ndarray) -> int:
@@ -480,9 +523,16 @@ def train(cfg: Config) -> None:
         patch_size=cfg.patch_size,
         ignore_bottom_px=cfg.ignore_bottom_px,
         dataset_size=cfg.dataset_size,
+        input_image_count=cfg.input_image_count,
+        input_selection=cfg.input_selection,
+        require_input_image_count=cfg.require_input_image_count,
         hflip=cfg.hflip,
         vflip=cfg.vflip,
     )
+    write_selected_inputs(dataset.files, save_dir / "selected_input_images.txt")
+    print(f"Selected {len(dataset.files)} input image(s):")
+    for i, file_path in enumerate(dataset.files, start=1):
+        print(f"  {i}: {file_path}")
     loader = DataLoader(
         dataset,
         batch_size=cfg.batch_size,
@@ -503,7 +553,7 @@ def train(cfg: Config) -> None:
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
     diffusion = GaussianDiffusion(timesteps=cfg.timesteps, schedule=cfg.beta_schedule, device=str(device))
 
-    scaler = torch.cuda.amp.GradScaler(enabled=(cfg.amp and device.type == "cuda"))
+    scaler = torch.amp.GradScaler("cuda", enabled=(cfg.amp and device.type == "cuda"))
 
     model.train()
     data_iter = iter(loader)
@@ -511,10 +561,14 @@ def train(cfg: Config) -> None:
     # Optional debug output: real patches before training
     if cfg.save_real_debug_grid:
         debug_batch = next(data_iter)
-        save_grid(debug_batch[: min(16, debug_batch.size(0))], save_dir / "real_patches_debug.png", nrow=4)
+        real_debug = debug_batch[: min(16, debug_batch.size(0))]
+        save_grid(real_debug, save_dir / "real_patches_debug.png", nrow=int(math.sqrt(real_debug.size(0))))
+        if cfg.save_individual_samples:
+            save_individual_images(real_debug, save_dir / "real_patches_debug_individual", "real_patch")
 
     start = time.time()
     for step in range(1, cfg.max_steps + 1):
+        sampled_for_eval = None
         try:
             x0 = next(data_iter)
         except StopIteration:
@@ -528,7 +582,7 @@ def train(cfg: Config) -> None:
         xt = diffusion.q_sample(x0, t, noise=noise)
 
         optimizer.zero_grad(set_to_none=True)
-        with torch.cuda.amp.autocast(enabled=(cfg.amp and device.type == "cuda")):
+        with torch.amp.autocast(device_type=device.type, enabled=(cfg.amp and device.type == "cuda")):
             pred_noise = model(xt, t)
             loss = F.mse_loss(pred_noise, noise)
 
@@ -548,15 +602,21 @@ def train(cfg: Config) -> None:
             with torch.no_grad():
                 sampled = diffusion.sample(model, (cfg.num_samples, 1, cfg.patch_size, cfg.patch_size), device=device)
             save_grid(sampled, save_dir / f"samples_step_{step}.png", nrow=int(math.sqrt(cfg.num_samples)))
+            if cfg.save_individual_samples:
+                save_individual_images(sampled, save_dir / f"samples_step_{step}_individual", "sample")
+            sampled_for_eval = sampled
             model.train()
 
         if step % cfg.eval_interval == 0:
             model.eval()
             with torch.no_grad():
-                sampled = diffusion.sample(model, (cfg.num_samples, 1, cfg.patch_size, cfg.patch_size), device=device)
+                if sampled_for_eval is None:
+                    sampled_for_eval = diffusion.sample(
+                        model, (cfg.num_samples, 1, cfg.patch_size, cfg.patch_size), device=device
+                    )
                 real_for_eval = x0[: cfg.num_samples]
 
-            gen_stats = compute_batch_stats(sampled, cfg.pore_threshold_mode, cfg.pore_threshold_fixed)
+            gen_stats = compute_batch_stats(sampled_for_eval, cfg.pore_threshold_mode, cfg.pore_threshold_fixed)
             real_stats = compute_batch_stats(real_for_eval, cfg.pore_threshold_mode, cfg.pore_threshold_fixed)
             row = {"step": step}
             row.update({f"gen_{k}": v for k, v in gen_stats.items()})
