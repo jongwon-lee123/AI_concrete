@@ -36,6 +36,16 @@ class Config:
     num_workers: int = 0  # Windows-friendly default
     dataset_size: int = 20000  # virtual length for random patch sampling
 
+    # Patch selection. "structure" avoids fully random crops by preferring patches with
+    # aggregate/paste boundaries and a controlled amount of dark pore/defect pixels.
+    patch_sampling_mode: str = "structure"  # ["random", "structure"]
+    patch_candidate_tries: int = 32
+    edge_threshold: int = 10  # grayscale gradient threshold for boundary/texture pixels
+    min_edge_fraction: float = 0.015
+    min_mid_gray_fraction: float = 0.45  # keep cement/aggregate matrix dominant, not only black pores
+    min_dark_fraction: float = 0.005
+    max_dark_fraction: float = 0.35
+
     # Training
     seed: int = 42
     batch_size: int = 4  # safer default for an 8 GB GPU
@@ -108,10 +118,20 @@ def parse_args() -> Config:
         raise ValueError("pore_threshold_mode must be one of [otsu, fixed]")
     if cfg.input_selection not in {"first", "random", "all"}:
         raise ValueError("input_selection must be one of [first, random, all]")
+    if cfg.patch_sampling_mode not in {"random", "structure"}:
+        raise ValueError("patch_sampling_mode must be one of [random, structure]")
     if cfg.num_samples <= 0:
         raise ValueError("num_samples must be > 0")
     if cfg.input_image_count < 0:
         raise ValueError("input_image_count must be >= 0")
+    if cfg.patch_candidate_tries <= 0:
+        raise ValueError("patch_candidate_tries must be > 0")
+    if not 0.0 <= cfg.min_dark_fraction <= cfg.max_dark_fraction <= 1.0:
+        raise ValueError("dark fraction bounds must satisfy 0 <= min_dark_fraction <= max_dark_fraction <= 1")
+    if not 0.0 <= cfg.min_mid_gray_fraction <= 1.0:
+        raise ValueError("min_mid_gray_fraction must be in [0, 1]")
+    if not 0.0 <= cfg.min_edge_fraction <= 1.0:
+        raise ValueError("min_edge_fraction must be in [0, 1]")
     return cfg
 
 
@@ -132,12 +152,26 @@ class BSEPatchDataset(Dataset):
         require_input_image_count: bool = False,
         hflip: bool = True,
         vflip: bool = False,
+        patch_sampling_mode: str = "random",
+        patch_candidate_tries: int = 32,
+        edge_threshold: int = 10,
+        min_edge_fraction: float = 0.015,
+        min_mid_gray_fraction: float = 0.45,
+        min_dark_fraction: float = 0.005,
+        max_dark_fraction: float = 0.35,
     ):
         self.patch_size = patch_size
         self.ignore_bottom_px = max(0, ignore_bottom_px)
         self.dataset_size = dataset_size
         self.hflip = hflip
         self.vflip = vflip
+        self.patch_sampling_mode = patch_sampling_mode
+        self.patch_candidate_tries = max(1, patch_candidate_tries)
+        self.edge_threshold = edge_threshold
+        self.min_edge_fraction = min_edge_fraction
+        self.min_mid_gray_fraction = min_mid_gray_fraction
+        self.min_dark_fraction = min_dark_fraction
+        self.max_dark_fraction = max_dark_fraction
 
         root = Path(data_dir)
         if not root.exists():
@@ -167,7 +201,7 @@ class BSEPatchDataset(Dataset):
     def __len__(self) -> int:
         return self.dataset_size
 
-    def _safe_crop_patch(self, img: Image.Image) -> Image.Image:
+    def _prepare_valid_region(self, img: Image.Image) -> Image.Image:
         w, h = img.size
         valid_h = max(1, h - self.ignore_bottom_px)
 
@@ -181,11 +215,58 @@ class BSEPatchDataset(Dataset):
             new_w = max(self.patch_size, int(round(w * scale)))
             new_h = max(self.patch_size, int(round(h * scale)))
             img = img.resize((new_w, new_h), Image.BICUBIC)
-            w, h = img.size
 
+        return img
+
+    def _random_patch_from_valid_region(self, img: Image.Image) -> Image.Image:
+        w, h = img.size
         x0 = random.randint(0, w - self.patch_size)
         y0 = random.randint(0, h - self.patch_size)
         return img.crop((x0, y0, x0 + self.patch_size, y0 + self.patch_size))
+
+    def _patch_quality(self, patch: Image.Image) -> Tuple[bool, float]:
+        arr = np.asarray(patch, dtype=np.uint8)
+        dark_fraction = float((arr <= 85).mean())
+        mid_gray_fraction = float(((arr >= 70) & (arr <= 210)).mean())
+
+        dx = np.abs(np.diff(arr.astype(np.int16), axis=1))
+        dy = np.abs(np.diff(arr.astype(np.int16), axis=0))
+        edge_fraction = float(
+            ((dx > self.edge_threshold).sum() + (dy > self.edge_threshold).sum())
+            / max(1, dx.size + dy.size)
+        )
+
+        dark_ok = self.min_dark_fraction <= dark_fraction <= self.max_dark_fraction
+        mid_ok = mid_gray_fraction >= self.min_mid_gray_fraction
+        edge_ok = edge_fraction >= self.min_edge_fraction
+        accepted = dark_ok and mid_ok and edge_ok
+
+        # Prefer aggregate/paste boundary texture, but penalize patches dominated by black defects.
+        dark_center = 0.5 * (self.min_dark_fraction + self.max_dark_fraction)
+        dark_penalty = abs(dark_fraction - dark_center)
+        score = edge_fraction + 0.25 * mid_gray_fraction - 0.5 * dark_penalty
+        return accepted, score
+
+    def _safe_crop_patch(self, img: Image.Image) -> Image.Image:
+        img = self._prepare_valid_region(img)
+        if self.patch_sampling_mode == "random":
+            return self._random_patch_from_valid_region(img)
+
+        best_patch: Optional[Image.Image] = None
+        best_score = -float("inf")
+        for _ in range(self.patch_candidate_tries):
+            patch = self._random_patch_from_valid_region(img)
+            accepted, score = self._patch_quality(patch)
+            if score > best_score:
+                best_patch = patch
+                best_score = score
+            if accepted:
+                return patch
+
+        # If no patch satisfies every criterion, keep the strongest structured candidate.
+        if best_patch is None:
+            return self._random_patch_from_valid_region(img)
+        return best_patch
 
     def __getitem__(self, idx: int) -> torch.Tensor:
         # random file choice decoupled from idx to improve variation
@@ -528,6 +609,13 @@ def train(cfg: Config) -> None:
         require_input_image_count=cfg.require_input_image_count,
         hflip=cfg.hflip,
         vflip=cfg.vflip,
+        patch_sampling_mode=cfg.patch_sampling_mode,
+        patch_candidate_tries=cfg.patch_candidate_tries,
+        edge_threshold=cfg.edge_threshold,
+        min_edge_fraction=cfg.min_edge_fraction,
+        min_mid_gray_fraction=cfg.min_mid_gray_fraction,
+        min_dark_fraction=cfg.min_dark_fraction,
+        max_dark_fraction=cfg.max_dark_fraction,
     )
     write_selected_inputs(dataset.files, save_dir / "selected_input_images.txt")
     print(f"Selected {len(dataset.files)} input image(s):")
