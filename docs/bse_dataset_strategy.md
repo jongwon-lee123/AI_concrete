@@ -19,9 +19,10 @@ Example PowerShell command:
 & C:/ProgramData/anaconda3/envs/test/python.exe C:/Users/whddn/Desktop/AI/AI_concrete/train_ddpm_bse.py `
   --data_dir "C:\Users\whddn\Desktop\BSE_mag50" `
   --save_dir "C:\Users\whddn\Desktop\AI\AI_concrete\outputs_mag50_structure" `
-  --input_selection all `
-  --input_image_count 0 `
-  --require_input_image_count False `
+  --input_selection first `
+  --input_image_count 4 `
+  --require_input_image_count True `
+  --num_samples 9 `
   --ignore_bottom_px 180 `
   --patch_size 256 `
   --batch_size 4 `
@@ -32,6 +33,10 @@ Example PowerShell command:
   --min_dark_fraction 0.005 `
   --max_dark_fraction 0.35
 ```
+
+## Quick 4-image / 9-sample pilot
+
+For a fast pilot with exactly four selected 50x inputs, keep `input_image_count=4` and `num_samples=9`. The saved grid will be 3x3 instead of 4x4, which makes every sampling/evaluation pass lighter.
 
 ## Image acquisition recommendation
 

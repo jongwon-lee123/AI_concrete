@@ -28,7 +28,7 @@ class Config:
     # Dataset / patch sampling
     patch_size: int = 256
     ignore_bottom_px: int = 180  # crop the SEM footer/scale-bar overlay before sampling
-    input_image_count: int = 6  # use exactly this many source images by default (0 = all images)
+    input_image_count: int = 4  # use exactly this many source images by default (0 = all images)
     input_selection: str = "first"  # ["first", "random", "all"]
     require_input_image_count: bool = True  # fail clearly if fewer than input_image_count images exist
     hflip: bool = True
@@ -65,7 +65,7 @@ class Config:
     time_emb_dim: int = 256
 
     # Sampling / checkpoint
-    num_samples: int = 16
+    num_samples: int = 9
     sample_interval: int = 1000
     ckpt_interval: int = 2000
     save_individual_samples: bool = True  # also save each generated patch separately (not only a grid)
